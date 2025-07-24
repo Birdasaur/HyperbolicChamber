@@ -13,26 +13,64 @@ public class OptimizationUtils {
     /**
      * Perform gradient ascent to find the direction ξ that maximizes Busemann variance.
      */
-    public static VectorN optimizeDirection(VectorN initialDirection,
-                                            List<VectorN> data,
-                                            double learningRate,
-                                            int maxIterations,
-                                            double tolerance) {
-        VectorN direction = initialDirection;
-        double prevVariance = computeBusemannVariance(direction, data);
+public static VectorN optimizeDirection(VectorN initialDirection,
+                                        List<VectorN> data,
+                                        double initialLearningRate,
+                                        int maxIterations,
+                                        double tolerance,
+                                        boolean verbose) {
 
-        for (int iter = 0; iter < maxIterations; iter++) {
-            VectorN gradient = computeBusemannGradient(direction, data);
-            direction = direction.add(gradient.scale(learningRate)).normalize();
+    VectorN direction = initialDirection.normalize();
+    double prevVariance = computeBusemannVariance(direction, data);
 
-            double variance = computeBusemannVariance(direction, data);
-            if (Math.abs(variance - prevVariance) < tolerance) break;
+    double learningRate = initialLearningRate;
+    double decayRate = 0.98;           // Multiplied each 50 iterations
+    int decayInterval = 50;
+    double maxGradientNorm = 10.0;
 
-            prevVariance = variance;
+    if (verbose) {
+        System.out.printf("Initial Busemann Variance: %.6f\n", prevVariance);
+    }
+
+    for (int iter = 1; iter <= maxIterations; iter++) {
+        VectorN gradient = computeBusemannGradient(direction, data);
+
+        // Gradient clipping (safe step control)
+        double gradNorm = gradient.norm();
+        if (gradNorm > maxGradientNorm) {
+            gradient = gradient.scale(maxGradientNorm / gradNorm);
         }
 
-        return direction;
+        // Learning rate decay
+        if (iter % decayInterval == 0) {
+            learningRate *= decayRate;
+        }
+
+        // Gradient ascent update with projection back to unit sphere
+        direction = direction.add(gradient.scale(learningRate)).normalize();
+
+        double variance = computeBusemannVariance(direction, data);
+        double delta = Math.abs(variance - prevVariance);
+
+        if (verbose) {
+            System.out.printf("Iter %3d | Variance: %.6f | Δ: %.8f | GradNorm: %.4f | LR: %.6f\n",
+                    iter, variance, delta, gradNorm, learningRate);
+        }
+
+        if (delta < tolerance) {
+            if (verbose) {
+                System.out.println("Converged: Δ variance below tolerance.");
+            }
+            break;
+        }
+
+        prevVariance = variance;
     }
+
+    return direction;
+}
+
+
     public static VectorN randomPointInPoincareBall(int dim) {
         VectorN v;
         do {
