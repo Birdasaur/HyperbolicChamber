@@ -4,6 +4,8 @@ package HyperbolicChamber;
  *
  * @author Sean Phillips
  */
+import static HyperbolicChamber.HoroPCAValidator.printExplainedVariance;
+import static HyperbolicChamber.HoroPCAValidator.printVariancePerDimension;
 import static HyperbolicChamber.HyperbolicUtils.hyperbolicSquaredDist;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,6 +27,7 @@ public class HoroPCA {
     private final int kmeansSeed;
     private List<VectorN> projectionDirections; // learned ξ vectors
     public boolean verbose = false;
+    public boolean verboseOptimization = false;
     
     public HoroPCA() {
         this(3, 1000, 0.05, 1e-8, InitializationStrategy.KMEANS_PLUS_PLUS, hyperbolicSquaredDist, 42);
@@ -57,17 +60,42 @@ public class HoroPCA {
      */
     public void fit(List<VectorN> data, int k) {
         projectionDirections.clear();
+        if (verbose) {
+            System.out.println("[DEBUG] Starting HoroPCA fit...");
+        }
+
+        // STEP 1: Variance of raw data (for baseline)
+        if (verbose) {
+            System.out.println("[DEBUG] Raw data variance:");
+            printVariancePerDimension(data);
+        }
+
+        // STEP 2: Initialize directions
         List<VectorN> initialDirections = switch (initStrategy) {
             case RANDOM_UNIT_SPHERE ->
                 OptimizationUtils.generateRandomUnitVectors(k, data.get(0).dimension());
             case KMEANS_PLUS_PLUS ->
-                OptimizationUtils.selectInitialDirectionsWithKMeans(data, kmeansSeed, hyperbolicSquaredDist, kmeansSeed);
+                OptimizationUtils.selectInitialDirectionsWithKMeans(
+                data, kmeansSeed, hyperbolicSquaredDist, k);
         };
+
+        // Optional: Check variance in initial projections
+        if (verbose) {
+            System.out.println("[DEBUG] Initial horospherical projections:");
+            printExplainedVariance(data, initialDirections);
+        }
+        // STEP 3: Optimize each direction
         for (int i = 0; i < k; i++) {
             VectorN direction = OptimizationUtils.optimizeDirection(
-                initialDirections.get(i), data, learningRate, 
-                maxIterations, tolerance, verbose);
+                    initialDirections.get(i), data, learningRate,
+                    maxIterations, tolerance, verboseOptimization);
             projectionDirections.add(direction);
+        }
+
+        // STEP 4: Final projections
+        if (verbose) {
+            System.out.println("[DEBUG] Final horospherical projections:");
+            printExplainedVariance(data, projectionDirections);
         }
     }
 
@@ -93,6 +121,7 @@ public class HoroPCA {
     public List<VectorN> fitTransform(List<VectorN> data) {
         return fitTransform(data, numComponents);
     }
+
     /**
      * Convenience method to fit and transform the data.
      */
@@ -142,55 +171,60 @@ public class HoroPCA {
 
         return x;
     }
-    
-/**
- * Computes the explained variance along each horospherical direction ξ.
- * @param projectedData The output of the transform() method (n × k).
- * @return An array of variances, one per component.
- */
-public double[] explainedVariance(List<VectorN> transformedData) {
-    if (transformedData.isEmpty()) return new double[0];
 
-    int k = transformedData.get(0).dimension();  // number of components
-    int n = transformedData.size();              // number of data points
-    double[] variances = new double[k];
-
-    for (int j = 0; j < k; j++) {
-        double sum = 0.0;
-        double sumSq = 0.0;
-
-        for (VectorN v : transformedData) {
-            double x = v.get(j);
-            sum += x;
-            sumSq += x * x;
+    /**
+     * Computes the explained variance along each horospherical direction ξ.
+     *
+     * @param projectedData The output of the transform() method (n × k).
+     * @return An array of variances, one per component.
+     */
+    public double[] explainedVariance(List<VectorN> transformedData) {
+        if (transformedData.isEmpty()) {
+            return new double[0];
         }
 
-        double mean = sum / n;
-        variances[j] = (sumSq / n) - (mean * mean);  // population variance
+        int k = transformedData.get(0).dimension();  // number of components
+        int n = transformedData.size();              // number of data points
+        double[] variances = new double[k];
+
+        for (int j = 0; j < k; j++) {
+            double sum = 0.0;
+            double sumSq = 0.0;
+
+            for (VectorN v : transformedData) {
+                double x = v.get(j);
+                sum += x;
+                sumSq += x * x;
+            }
+
+            double mean = sum / n;
+            variances[j] = (sumSq / n) - (mean * mean);  // population variance
+        }
+
+        return variances;
     }
 
-    return variances;
-}
-/**
- * Computes the percentage of total variance explained by each horospherical component.
- * @param projectedData The output of the transform() method (n × k).
- * @return An array of percentages summing to 1.0 (or 100.0 if scaled).
- */
+    /**
+     * Computes the percentage of total variance explained by each horospherical
+     * component.
+     *
+     * @param projectedData The output of the transform() method (n × k).
+     * @return An array of percentages summing to 1.0 (or 100.0 if scaled).
+     */
 
-public double[] explainedVarianceRatio(List<VectorN> transformedData) {
-    double[] variances = explainedVariance(transformedData);
-    double total = Arrays.stream(variances).sum();
-    if (total == 0.0) return new double[variances.length];
+    public double[] explainedVarianceRatio(List<VectorN> transformedData) {
+        double[] variances = explainedVariance(transformedData);
+        double total = Arrays.stream(variances).sum();
+        if (total == 0.0) {
+            return new double[variances.length];
+        }
 
-    double[] ratio = new double[variances.length];
-    for (int i = 0; i < variances.length; i++) {
-        ratio[i] = variances[i] / total;
+        double[] ratio = new double[variances.length];
+        for (int i = 0; i < variances.length; i++) {
+            ratio[i] = variances[i] / total;
+        }
+        return ratio;
     }
-    return ratio;
-}
-
-
-
 
     /**
      * @return The list of learned principal horospherical directions.
@@ -198,4 +232,6 @@ public double[] explainedVarianceRatio(List<VectorN> transformedData) {
     public List<VectorN> getPrincipalDirections() {
         return new ArrayList<>(projectionDirections);
     }
+
+
 }

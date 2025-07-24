@@ -115,7 +115,7 @@ public static VectorN optimizeDirection(VectorN initialDirection,
         for (int i = 0; i < data.size(); i++) {
             VectorN point = data.get(i);
             double diff = projections[i] - mean;
-            VectorN grad_i = HyperbolicUtils.busemannProjectionGradient(point, direction);
+            VectorN grad_i = HyperbolicUtils.busemannProjectionGradientDirection(point, direction);
             for (int j = 0; j < dim; j++) {
                 grad[j] += 2 * diff * grad_i.get(j);
             }

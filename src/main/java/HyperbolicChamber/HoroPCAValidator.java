@@ -1,22 +1,75 @@
 package HyperbolicChamber;
 
+import static HyperbolicChamber.HyperbolicUtils.horosphericalProjection;
+import java.util.List;
+
 /**
  *
  * @author sean phillips
  */
-import java.util.List;
-
 public class HoroPCAValidator {
 
-public static void printExplainedVariance(HoroPCA model, List<VectorN> transformedData) {
-    double[] ev = model.explainedVariance(transformedData);
-    double[] ratio = model.explainedVarianceRatio(transformedData);
+    public static void printExplainedVariance(List<VectorN> data, List<VectorN> directions) {
+        int k = directions.size();
+        double[] variances = new double[k];
+        double total = 0;
 
-    System.out.println("Explained Variance per Component:");
-    for (int i = 0; i < ev.length; i++) {
-        System.out.printf("  [%d]: %.9f (%.2f%%)\n", i, ev[i], ratio[i] * 100.0);
+        for (VectorN x : data) {
+            for (int i = 0; i < k; i++) {
+                double p = horosphericalProjection(x, directions.get(i));
+                variances[i] += p * p;
+            }
+        }
+
+        for (int i = 0; i < k; i++) {
+            variances[i] /= data.size();
+            total += variances[i];
+        }
+
+        System.out.println("Explained Variance per Direction:");
+        for (int i = 0; i < k; i++) {
+            double percent = 100.0 * variances[i] / total;
+            System.out.printf("  Dir %d: %.6f (%.2f%%)%n", i, variances[i], percent);
+        }
     }
-}
+
+    public static void printVariancePerDimension(List<VectorN> data) {
+        if (data.isEmpty()) {
+            return;
+        }
+
+        int dim = data.get(0).dimension();
+        double[] means = new double[dim];
+        double[] variances = new double[dim];
+        int n = data.size();
+
+        // Compute means
+        for (VectorN vec : data) {
+            for (int i = 0; i < dim; i++) {
+                means[i] += vec.get(i);
+            }
+        }
+        for (int i = 0; i < dim; i++) {
+            means[i] /= n;
+        }
+
+        // Compute variances
+        for (VectorN vec : data) {
+            for (int i = 0; i < dim; i++) {
+                double diff = vec.get(i) - means[i];
+                variances[i] += diff * diff;
+            }
+        }
+        for (int i = 0; i < dim; i++) {
+            variances[i] /= n;
+        }
+
+        // Print result
+        System.out.println("Raw Variance per Dimension:");
+        for (int i = 0; i < dim; i++) {
+            System.out.printf("  Dim %d: %.6f%n", i, variances[i]);
+        }
+    }
 
     public static double reconstructionError(List<VectorN> original, List<VectorN> reconstructed) {
         double totalError = 0.0;
@@ -30,4 +83,3 @@ public static void printExplainedVariance(HoroPCA model, List<VectorN> transform
         return totalError / count;
     }
 }
-
