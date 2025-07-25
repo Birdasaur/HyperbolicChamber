@@ -1,8 +1,9 @@
 package HyperbolicChamber;
 
-import static HyperbolicChamber.HoroPCAValidator.printTotalTime;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.File;
+import java.io.IOException;
 import javafx.application.Application;
-import javafx.geometry.Insets;
 import javafx.geometry.Point3D;
 import javafx.scene.AmbientLight;
 import javafx.scene.Group;
@@ -13,21 +14,24 @@ import javafx.scene.SubScene;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.input.ScrollEvent;
-import javafx.scene.layout.Background;
-import javafx.scene.layout.BackgroundFill;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.CornerRadii;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.PhongMaterial;
 import javafx.scene.shape.Sphere;
 import javafx.stage.Stage;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javafx.scene.input.DragEvent;
+import javafx.scene.input.Dragboard;
+import javafx.scene.input.TransferMode;
 
 public class App extends Application {
-
+    HoroPCAControlPanel controls;
     PerspectiveCamera camera = new PerspectiveCamera(true);
     public Group sceneRoot = new Group();
     public SubScene subScene;
@@ -148,12 +152,27 @@ public class App extends Application {
         });
 
         BorderPane bpOilSpill = new BorderPane(stackPane);
-        HoroPCAControlPanel controls = new HoroPCAControlPanel(dataGroup);
+        controls = new HoroPCAControlPanel(dataGroup);
         bpOilSpill.setLeft(controls);
-//        stackPane.getChildren().clear();
-//        stackPane.getChildren().addAll(bpOilSpill);
-//        stackPane.setPadding(new Insets(10));
-//        stackPane.setBackground(new Background(new BackgroundFill(Color.rgb(255, 255, 255), CornerRadii.EMPTY, Insets.EMPTY)));
+        bpOilSpill.addEventHandler(DragEvent.DRAG_OVER, event -> {
+            if (true) {
+                event.acceptTransferModes(TransferMode.COPY);
+            } else {
+                event.consume();
+            }
+        });
+        bpOilSpill.addEventHandler(DragEvent.DRAG_DROPPED, event -> {
+            Dragboard db = event.getDragboard();
+            if (db.hasFiles()) {
+                final File file = db.getFiles().get(0);
+                try {
+                    onDrop(file);
+                } catch (Exception ex) {
+                    Logger.getLogger(App.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
+        });        
+        
         Scene scene = new Scene(bpOilSpill, 1000, 1000);
         scene.setOnMouseEntered(event -> subScene.requestFocus());
 
@@ -161,54 +180,15 @@ public class App extends Application {
         primaryStage.setScene(scene);
         primaryStage.show();
 
-        genEuclid2Hyper();
-//        runHoroPCA();        
+//        genEuclid2Hyper();
     }
-//    private void runHoroPCA() {
-//        int inputDim = 100;
-//        int targetDim = 3;
-//        int maxIterations = 300;
-//        int numClusters = 4;
-//        int pointsPerCluster = 50;
-//        int seed = 42;
-//        double learningRate = 0.01;
-//        double tolerance = 1e-8;
-//        System.out.println("Generating synthetic clustered data.");
-//        long startTime = System.nanoTime();
-//        // Step 1: Generate synthetic clustered data on the Poincaré ball
-//        PoincareBallFactory factory = new PoincareBallFactory(inputDim, seed);
-//        // generate anisotropic set
-//        double[] anisotropicSpread = new double[inputDim];
-//        for (int i = 0; i < inputDim; i++) {
-//            anisotropicSpread[i] = Math.pow(0.5, i);  // strong in lower dims
-//        }        
-//        List<VectorN> anisotropicDataset = factory.generateAnisotropicClusteredData(
-//                numClusters, pointsPerCluster, anisotropicSpread);  
-//        printTotalTime(startTime);
-//
-//        System.out.println("Fitting HoroPCA model and transforming data...");
-//        startTime = System.nanoTime();
-//        HoroPCA horo2 = new HoroPCA(targetDim, maxIterations, learningRate, tolerance, 
-//            HoroPCA.InitializationStrategy.KMEANS_PLUS_PLUS, 
-//                HyperbolicUtils.hyperbolicSquaredDist, seed);
-//        List<VectorN> transformed2  = horo2.fitTransform(anisotropicDataset);
-//        printTotalTime(startTime);
-//
-//        //make some spheres
-//        dataGroup.getChildren().addAll(
-//            transformed2.stream()
-//            .map(v -> {
-//                Sphere sphere = new Sphere(radius, divisions);
-//                sphere.setTranslateX(v.get(0)*scale);
-//                sphere.setTranslateY(-v.get(1)*scale);
-//                sphere.setTranslateZ(v.get(2)*scale);
-//                PhongMaterial phong = new PhongMaterial(Color.CYAN);
-//                sphere.setMaterial(phong);
-//                return sphere;
-//            })
-//            .toList()
-//        );        
-//    }
+    private void onDrop(File file) throws IOException{
+        ObjectMapper mapper = new ObjectMapper();
+        double[][] embeddings = mapper.readValue(file, double[][].class);   
+        System.out.println("Done loading embedings.");
+        List<VectorN> vectorNList = Arrays.stream(embeddings).map(t -> new VectorN(t)).toList();
+        controls.fitTransformAndPlot(vectorNList);
+    }
     private void genEuclid2Hyper() {
         int pointCount = 1000;
         positions = new ArrayList<>(pointCount);

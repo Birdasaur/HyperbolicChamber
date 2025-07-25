@@ -2,7 +2,12 @@ package HyperbolicChamber;
 
 import HyperbolicChamber.HoroPCA.InitializationStrategy;
 import static HyperbolicChamber.HoroPCAValidator.printTotalTime;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import javafx.scene.layout.VBox;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -31,6 +36,7 @@ public class HoroPCAControlPanel extends VBox {
     private final Spinner<Integer> numClustersSpinner = createIntegerSpinner(1, 1000, 4);
     private final Spinner<Integer> pointsPerClusterSpinner = createIntegerSpinner(1, 10000, 50);
     private final Spinner<Double> scaleSpinner = createDoubleSpinner(1, 1000.0, 50.0, 1);
+    private final Spinner<Double> radiusSpinner = createDoubleSpinner(0.1, 10.0, 1.0, 0.1);
     private final Spinner<Double> learningRateSpinner = createDoubleSpinner(0.0001, 1.0, 0.01, 0.0001);
     private final Spinner<Double> toleranceSpinner = createDoubleSpinner(1e-10, 1e-2, 1e-8, 1e-10);
 
@@ -55,6 +61,7 @@ public class HoroPCAControlPanel extends VBox {
             labeled("Learning Rate", learningRateSpinner),
             labeled("Tolerance", toleranceSpinner),
             labeled("Output Scale", scaleSpinner),            
+            labeled("Point Radius", radiusSpinner),
             labeled("Initialization Strategy", initStrategyCombo),
             verboseCheckBox,
             verboseOptCheckBox
@@ -111,7 +118,7 @@ public class HoroPCAControlPanel extends VBox {
      * Replace this stub with your actual invocation logic.
      */
     private void runHoroPCA() {
-    double scale = 50;
+    double scale = scaleSpinner.getValue();
     double radius = 1;
     int divisions = 8;
     
@@ -127,20 +134,6 @@ public class HoroPCAControlPanel extends VBox {
         boolean verboseOptimization = verboseOptCheckBox.isSelected();
         int seed = 42;
         
-        System.out.printf("""
-            Running HoroPCA with parameters:
-              inputDim=%d, targetDim=%d, maxIterations=%d
-              clusters=%d, pointsPerCluster=%d
-              learningRate=%.10f, tolerance=%.1e
-              initStrategy=%s
-              verbose=%b, verboseOptimization=%b
-            """,
-            inputDim, targetDim, maxIterations,
-            numClusters, pointsPerCluster,
-            learningRate, tolerance,
-            strategy, verbose, verboseOptimization
-        );
-
         System.out.println("Generating synthetic clustered data.");
         long startTime = System.nanoTime();
         // Step 1: Generate synthetic clustered data on the Poincaré ball
@@ -153,16 +146,36 @@ public class HoroPCAControlPanel extends VBox {
         List<VectorN> anisotropicDataset = factory.generateAnisotropicClusteredData(
                 numClusters, pointsPerCluster, anisotropicSpread);  
         printTotalTime(startTime);
+        fitTransformAndPlot(anisotropicDataset);
 
+    }
+    public void fitTransformAndPlot(List<VectorN> vectors) {
+    double scale = scaleSpinner.getValue();
+    double radius = 1;
+    int divisions = 8;        
+        int inputDim = inputDimSpinner.getValue();
+        int targetDim = targetDimSpinner.getValue();
+        int maxIterations = maxIterationsSpinner.getValue();
+        int numClusters = numClustersSpinner.getValue();
+        int pointsPerCluster = pointsPerClusterSpinner.getValue();
+        double learningRate = learningRateSpinner.getValue();
+        double tolerance = toleranceSpinner.getValue();
+        InitializationStrategy strategy = initStrategyCombo.getValue();
+        boolean verbose = verboseCheckBox.isSelected();
+        boolean verboseOptimization = verboseOptCheckBox.isSelected();
+        int seed = 42;
+        
         System.out.println("Fitting HoroPCA model and transforming data...");
-        startTime = System.nanoTime();
+        long startTime = System.nanoTime();
         HoroPCA horo2 = new HoroPCA(targetDim, maxIterations, learningRate, tolerance, 
             HoroPCA.InitializationStrategy.KMEANS_PLUS_PLUS, 
                 HyperbolicUtils.hyperbolicSquaredDist, seed);
-        List<VectorN> transformed2  = horo2.fitTransform(anisotropicDataset);
+        List<VectorN> transformed2  = horo2.fitTransform(vectors);
         printTotalTime(startTime);
 
         //make some spheres
+        Map<String, Color> colorMap = generateClusterColorMap(transformed2);
+        
         dataGroup.getChildren().addAll(
             transformed2.stream()
             .map(v -> {
@@ -170,12 +183,36 @@ public class HoroPCAControlPanel extends VBox {
                 sphere.setTranslateX(v.get(0)*scale);
                 sphere.setTranslateY(-v.get(1)*scale);
                 sphere.setTranslateZ(v.get(2)*scale);
-                PhongMaterial phong = new PhongMaterial(Color.CYAN);
+                Color color = colorMap.getOrDefault(v.getLabel(), Color.GRAY);
+                PhongMaterial phong = new PhongMaterial(color);
                 sphere.setMaterial(phong);
                 return sphere;
             })
             .toList()
         );    
+        
     }
+private Map<String, Color> generateClusterColorMap(List<VectorN> vectors) {
+    Set<String> uniqueLabels = vectors.stream()
+        .map(VectorN::getLabel)
+        .collect(Collectors.toCollection(LinkedHashSet::new)); // preserve order
+
+    int clusterCount = uniqueLabels.size();
+    Map<String, Color> labelColorMap = new HashMap<>();
+
+    int index = 0;
+    for (String label : uniqueLabels) {
+        double hue = (360.0 * index) / clusterCount; // evenly spaced hues
+        double saturation = 0.8;  // vibrant
+        double brightness = 0.9;  // bright
+
+        Color color = Color.hsb(hue, saturation, brightness);
+        labelColorMap.put(label, color);
+        index++;
+    }
+
+    return labelColorMap;
+}
+ 
 }
 

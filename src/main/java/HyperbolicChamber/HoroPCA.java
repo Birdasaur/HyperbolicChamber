@@ -113,7 +113,9 @@ public class HoroPCA {
             for (int i = 0; i < projectionDirections.size(); i++) {
                 projection[i] = HyperbolicUtils.busemannProjection(point, projectionDirections.get(i));
             }
-            result.add(new VectorN(projection));
+            VectorN transformedVectorN = new VectorN(projection);
+            transformedVectorN.setLabel(point.getLabel());
+            result.add(transformedVectorN);
         }
         return result;
     }
