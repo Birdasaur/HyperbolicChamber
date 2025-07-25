@@ -70,18 +70,34 @@ public static VectorN optimizeDirection(VectorN initialDirection,
     return direction;
 }
 
+public static VectorN randomPointInPoincareBall(int dim) {
+    double[] coords = new double[dim];
 
-    public static VectorN randomPointInPoincareBall(int dim) {
-        VectorN v;
-        do {
-            double[] coords = new double[dim];
-            for (int i = 0; i < dim; i++) {
-                coords[i] = ThreadLocalRandom.current().nextDouble(-1.0, 1.0);
-            }
-            v = new VectorN(coords);
-        } while (v.norm() >= 1.0);
-        return v;
+    // Step 1: Sample direction from standard normal distribution
+    double normSq = 0.0;
+    for (int i = 0; i < dim; i++) {
+        double val = ThreadLocalRandom.current().nextGaussian();
+        coords[i] = val;
+        normSq += val * val;
     }
+
+    // Step 2: Normalize to unit vector
+    double norm = Math.sqrt(normSq);
+    for (int i = 0; i < dim; i++) {
+        coords[i] /= norm;
+    }
+
+    // Step 3: Sample radius using inverse CDF for uniformity inside hypersphere
+    double u = ThreadLocalRandom.current().nextDouble();  // in [0,1)
+    double radius = Math.pow(u, 1.0 / dim) * 0.999;  // safely inside unit ball
+
+    for (int i = 0; i < dim; i++) {
+        coords[i] *= radius;
+    }
+
+    return new VectorN(coords);
+}
+
     /**
      * Compute the variance of Busemann projections along a direction.
      */

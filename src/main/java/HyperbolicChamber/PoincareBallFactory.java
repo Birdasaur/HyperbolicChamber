@@ -18,26 +18,25 @@ public class PoincareBallFactory {
         this.random = new Random(seed);
     }
     //Generates clustered data with per-dimension spread
-public List<VectorN> generateAnisotropicClusteredData(int numClusters, int pointsPerCluster, double[] clusterSpreadPerDim) {
-    List<VectorN> data = new ArrayList<>();
-    for (int c = 0; c < numClusters; c++) {
-        VectorN center = randomUnitVector().scale(0.3); // small center radius
-        for (int i = 0; i < pointsPerCluster; i++) {
-            VectorN noise = randomAnisotropicVector(clusterSpreadPerDim);
-            VectorN point = center.add(noise);
+    public List<VectorN> generateAnisotropicClusteredData(int numClusters, int pointsPerCluster, double[] clusterSpreadPerDim) {
+        List<VectorN> data = new ArrayList<>();
+        for (int c = 0; c < numClusters; c++) {
+            VectorN center = randomUnitVector().scale(0.3); // small center radius
+            for (int i = 0; i < pointsPerCluster; i++) {
+                VectorN noise = randomAnisotropicVector(clusterSpreadPerDim);
+                VectorN point = center.add(noise);
 
-            // Avoid projection: ensure the point stays within ball
-            double norm = Math.sqrt(point.normSq());
-            if (norm >= 1.0) {
-                point = point.scale(0.99 / norm); // manual safety
+                // Avoid projection: ensure the point stays within ball
+                double norm = Math.sqrt(point.normSq());
+                if (norm >= 1.0) {
+                    point = point.scale(0.99 / norm); // manual safety
+                }
+                data.add(point);
             }
-
-            data.add(point);
         }
+        return data;
     }
-    return data;
-}
-  
+
     public List<VectorN> generateIsotropicClusteredData(int numClusters, int pointsPerCluster, double clusterSpread) {
         List<VectorN> data = new ArrayList<>();
         for (int c = 0; c < numClusters; c++) {
@@ -69,20 +68,22 @@ public List<VectorN> generateAnisotropicClusteredData(int numClusters, int point
         }
         return points;
     }
-public VectorN randomUnitVector() {
-    double[] vec = new double[dim];
-    double norm = 0;
-    for (int i = 0; i < dim; i++) {
-        double v = random.nextGaussian();
-        vec[i] = v;
-        norm += v * v;
+
+    public VectorN randomUnitVector() {
+        double[] vec = new double[dim];
+        double norm = 0;
+        for (int i = 0; i < dim; i++) {
+            double v = random.nextGaussian();
+            vec[i] = v;
+            norm += v * v;
+        }
+        norm = Math.sqrt(norm);
+        for (int i = 0; i < dim; i++) {
+            vec[i] /= norm;
+        }
+        return new VectorN(vec);
     }
-    norm = Math.sqrt(norm);
-    for (int i = 0; i < dim; i++) {
-        vec[i] /= norm;
-    }
-    return new VectorN(vec);
-}
+
     public VectorN randomVector(double scale) {
         double[] values = new double[dim];
         for (int i = 0; i < dim; i++) {
@@ -90,13 +91,15 @@ public VectorN randomUnitVector() {
         }
         return new VectorN(values);
     }
-public VectorN randomAnisotropicVector(double[] scales) {
-    double[] values = new double[dim];
-    for (int i = 0; i < dim; i++) {
-        values[i] = random.nextGaussian() * scales[i];
+
+    public VectorN randomAnisotropicVector(double[] scales) {
+        double[] values = new double[dim];
+        for (int i = 0; i < dim; i++) {
+            values[i] = random.nextGaussian() * scales[i];
+        }
+        return new VectorN(values);
     }
-    return new VectorN(values);
-}
+
     public VectorN projectToPoincareBall(VectorN v) {
         double norm = Math.sqrt(v.normSq());
         double scale = norm >= 1.0 ? 0.99 / norm : 1.0;

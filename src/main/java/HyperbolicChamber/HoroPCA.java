@@ -76,7 +76,7 @@ public class HoroPCA {
                 OptimizationUtils.generateRandomUnitVectors(k, data.get(0).dimension());
             case KMEANS_PLUS_PLUS ->
                 OptimizationUtils.selectInitialDirectionsWithKMeans(
-                data, kmeansSeed, hyperbolicSquaredDist, k);
+                data, kmeansSeed, distanceFunction, k);
         };
 
         // Optional: Check variance in initial projections
@@ -139,38 +139,65 @@ public class HoroPCA {
      * @param stepSize Gradient descent learning rate
      * @return Approximate point in original space (Poincaré ball)
      */
-    public VectorN inverseTransform(VectorN projection, int maxIters, double stepSize) {
-        int dim = projectionDirections.get(0).dimension();
-        VectorN x = OptimizationUtils.randomPointInPoincareBall(dim);
+public VectorN inverseTransform(VectorN projection, int maxIters, double baseStepSize, boolean verbose) {
+    int dim = projectionDirections.get(0).dimension();
+    VectorN x = OptimizationUtils.randomPointInPoincareBall(dim); // Safe initial guess
 
-        for (int iter = 0; iter < maxIters; iter++) {
-            double[] grad = new double[dim];
+    VectorN velocity = new VectorN(dim); // Momentum accumulator
+    double momentum = 0.9;
+    double epsilon = 1e-9;
 
-            for (int i = 0; i < projectionDirections.size(); i++) {
-                VectorN e = projectionDirections.get(i); //e == ξ
-                double z_i = projection.get(i);
-                double β_i = HyperbolicUtils.busemannProjection(x, e);
-                double error = β_i - z_i;
+    for (int iter = 0; iter < maxIters; iter++) {
+        double[] grad = new double[dim];
 
-                VectorN grad_i = HyperbolicUtils.busemannGradient(x, e).scale(2 * error);
-                for (int j = 0; j < dim; j++) {
-                    grad[j] += grad_i.get(j);
-                }
+        // Compute gradient
+        for (int i = 0; i < projectionDirections.size(); i++) {
+            VectorN e = projectionDirections.get(i).normalize();
+            double expectedZi = HyperbolicUtils.busemannProjection(x, e);
+            double diff = expectedZi - projection.get(i);
+
+            VectorN grad_i = HyperbolicUtils.busemannProjectionGradientDirection(x, e).scale(diff);
+            for (int d = 0; d < dim; d++) {
+                grad[d] += grad_i.get(d);
             }
-
-            VectorN gradient = new VectorN(grad).normalize().scale(stepSize);
-            VectorN updated = x.subtract(gradient);
-
-            // Project back into ball if needed
-            if (updated.norm() >= 1.0) {
-                updated = updated.normalize().scale(0.999);
-            }
-
-            x = updated;
         }
 
-        return x;
+        VectorN gradient = new VectorN(grad);
+
+        // Normalize gradient and apply adaptive step size
+        double stepSize = baseStepSize / (1.0 + 0.01 * iter);
+        VectorN update = gradient.normalize().scale(stepSize);
+
+        // Apply momentum
+        velocity = velocity.scale(momentum).add(update);
+        x = x.subtract(velocity);
+
+        // Clamp into ball if needed
+        double norm = x.norm();
+        if (norm >= 1.0) {
+            x = x.normalize().scale(0.999);
+        }
+
+        // Diagnostics (optional)
+        if(verbose)
+            if (iter % 50 == 0 || iter == maxIters - 1) {
+                double errorSum = 0;
+                for (int i = 0; i < projectionDirections.size(); i++) {
+                    VectorN e = projectionDirections.get(i).normalize();
+                    double proj = HyperbolicUtils.busemannProjection(x, e);
+                    errorSum += Math.abs(proj - projection.get(i));
+                }
+                System.out.printf("Iter %d: ErrorSum=%.6f, Norm(x)=%.6f%n", iter, errorSum, norm);
+            }
+
+        // Optional early stopping if gradient vanishes
+        if (gradient.norm() < epsilon) {
+            break;
+        }
     }
+
+    return x;
+}
 
     /**
      * Computes the explained variance along each horospherical direction ξ.
