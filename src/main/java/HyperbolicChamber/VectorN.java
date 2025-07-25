@@ -8,6 +8,7 @@ import java.util.Arrays;
 
 public class VectorN {
     private final double[] values;
+    private String label;
 
     public VectorN(int dimension) {
         this.values = new double[dimension];
@@ -102,5 +103,19 @@ public class VectorN {
     @Override
     public String toString() {
         return Arrays.toString(values);
+    }
+
+    /**
+     * @return the label
+     */
+    public String getLabel() {
+        return label;
+    }
+
+    /**
+     * @param label the label to set
+     */
+    public void setLabel(String label) {
+        this.label = label;
     }
 }

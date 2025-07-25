@@ -1,5 +1,6 @@
 package HyperbolicChamber;
 
+import static HyperbolicChamber.HoroPCAValidator.printTotalTime;
 import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.geometry.Point3D;
@@ -22,6 +23,7 @@ import javafx.scene.paint.PhongMaterial;
 import javafx.scene.shape.Sphere;
 import javafx.stage.Stage;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 public class App extends Application {
@@ -43,14 +45,15 @@ public class App extends Application {
 
     ArrayList<Point3D> positions;
     Random rando = new Random();
-    double scale = 100;
+    double scale = 50;
     int totalPoints = 10;
     double radius = 1;
     int divisions = 8;
-
+    Group dataGroup;
+    
     @Override
     public void start(Stage primaryStage) throws Exception {
-
+        dataGroup = new Group();
         subScene = new SubScene(sceneRoot, sceneWidth, sceneHeight, true, SceneAntialiasing.BALANCED);
         //Start Tracking mouse movements only when a button is pressed
         subScene.setOnMousePressed((MouseEvent me) -> {
@@ -109,7 +112,7 @@ public class App extends Application {
         sphereZ.setMaterial(new PhongMaterial(Color.BLUE));
 
         sceneRoot.getChildren().addAll(cameraTransform, ambientLight, 
-            sphereOrigin, sphereX, sphereY, sphereZ);
+            sphereOrigin, sphereX, sphereY, sphereZ, dataGroup);
 
         subScene.setOnKeyPressed(event -> {
             //What key did the user press?
@@ -144,19 +147,69 @@ public class App extends Application {
             }
         });
 
-        BorderPane bpOilSpill = new BorderPane(subScene);
-        stackPane.getChildren().clear();
-        stackPane.getChildren().addAll(bpOilSpill);
-        stackPane.setPadding(new Insets(10));
-        stackPane.setBackground(new Background(new BackgroundFill(Color.rgb(255, 255, 255), CornerRadii.EMPTY, Insets.EMPTY)));
-        Scene scene = new Scene(stackPane, 1000, 1000);
+        BorderPane bpOilSpill = new BorderPane(stackPane);
+        HoroPCAControlPanel controls = new HoroPCAControlPanel(dataGroup);
+        bpOilSpill.setLeft(controls);
+//        stackPane.getChildren().clear();
+//        stackPane.getChildren().addAll(bpOilSpill);
+//        stackPane.setPadding(new Insets(10));
+//        stackPane.setBackground(new Background(new BackgroundFill(Color.rgb(255, 255, 255), CornerRadii.EMPTY, Insets.EMPTY)));
+        Scene scene = new Scene(bpOilSpill, 1000, 1000);
         scene.setOnMouseEntered(event -> subScene.requestFocus());
 
-        primaryStage.setTitle("Concave Hull Test");
+        primaryStage.setTitle("Hyperbolic Chamber");
         primaryStage.setScene(scene);
         primaryStage.show();
 
-        //create 3D Matrix to hold data
+        genEuclid2Hyper();
+//        runHoroPCA();        
+    }
+//    private void runHoroPCA() {
+//        int inputDim = 100;
+//        int targetDim = 3;
+//        int maxIterations = 300;
+//        int numClusters = 4;
+//        int pointsPerCluster = 50;
+//        int seed = 42;
+//        double learningRate = 0.01;
+//        double tolerance = 1e-8;
+//        System.out.println("Generating synthetic clustered data.");
+//        long startTime = System.nanoTime();
+//        // Step 1: Generate synthetic clustered data on the Poincaré ball
+//        PoincareBallFactory factory = new PoincareBallFactory(inputDim, seed);
+//        // generate anisotropic set
+//        double[] anisotropicSpread = new double[inputDim];
+//        for (int i = 0; i < inputDim; i++) {
+//            anisotropicSpread[i] = Math.pow(0.5, i);  // strong in lower dims
+//        }        
+//        List<VectorN> anisotropicDataset = factory.generateAnisotropicClusteredData(
+//                numClusters, pointsPerCluster, anisotropicSpread);  
+//        printTotalTime(startTime);
+//
+//        System.out.println("Fitting HoroPCA model and transforming data...");
+//        startTime = System.nanoTime();
+//        HoroPCA horo2 = new HoroPCA(targetDim, maxIterations, learningRate, tolerance, 
+//            HoroPCA.InitializationStrategy.KMEANS_PLUS_PLUS, 
+//                HyperbolicUtils.hyperbolicSquaredDist, seed);
+//        List<VectorN> transformed2  = horo2.fitTransform(anisotropicDataset);
+//        printTotalTime(startTime);
+//
+//        //make some spheres
+//        dataGroup.getChildren().addAll(
+//            transformed2.stream()
+//            .map(v -> {
+//                Sphere sphere = new Sphere(radius, divisions);
+//                sphere.setTranslateX(v.get(0)*scale);
+//                sphere.setTranslateY(-v.get(1)*scale);
+//                sphere.setTranslateZ(v.get(2)*scale);
+//                PhongMaterial phong = new PhongMaterial(Color.CYAN);
+//                sphere.setMaterial(phong);
+//                return sphere;
+//            })
+//            .toList()
+//        );        
+//    }
+    private void genEuclid2Hyper() {
         int pointCount = 1000;
         positions = new ArrayList<>(pointCount);
         
@@ -183,17 +236,17 @@ public class App extends Application {
                 )
             ;            
             
-            
             positions.add(p3D);
+            
             Sphere sphere = new Sphere(radius, divisions);
             sphere.setTranslateX(hyper[0]*scale);
             sphere.setTranslateY(-hyper[1]*scale);
             sphere.setTranslateZ(hyper[2]*scale);
             sceneRoot.getChildren().add(sphere);
-        }   
-        
+        }           
     }
-/**
+    
+    /**
      * Converts an N-dimensional Euclidean vector to a 3D point on the Poincare hyperboloid model.
      *
      * @param euclideanVector N-dimensional Euclidean input vector
@@ -296,10 +349,8 @@ public class App extends Application {
     public static double[] toPoincareBall3D(double[] euclideanVector) {
         return toPoincareBall3D(euclideanVector, 1.0);
     }
-
- 
     
-/**
+    /**
      * Converts an N-dimensional Euclidean vector to a 3D point in the Klein model of hyperbolic space.
      *
      * @param euclideanVector N-dimensional input vector

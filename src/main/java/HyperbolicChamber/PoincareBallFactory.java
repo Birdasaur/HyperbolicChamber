@@ -25,7 +25,7 @@ public class PoincareBallFactory {
             for (int i = 0; i < pointsPerCluster; i++) {
                 VectorN noise = randomAnisotropicVector(clusterSpreadPerDim);
                 VectorN point = center.add(noise);
-
+                point.setLabel("Cluster " + c);
                 // Avoid projection: ensure the point stays within ball
                 double norm = Math.sqrt(point.normSq());
                 if (norm >= 1.0) {
